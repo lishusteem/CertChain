@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CertID Wallet - Onboarding</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <div class="status-bar">
+            <span class="time" id="current-time">9:41</span>
+            <div class="icons">
+                <span>📶</span>
+                <span>📡</span>
+                <span>🔋</span>
+            </div>
+        </div>
+        
+        <div class="header">
+            <h1>CertID Wallet</h1>
+        </div>
+        
+        <div class="onboarding-container">
+            <div class="info-card" style="margin: 20px; margin-bottom: 40px;">
+                <div class="info-title">Bine ai venit la CertID Wallet</div>
+                <div class="info-text">
+                    Pentru a folosi CertID Wallet, ai nevoie de un portofel blockchain. Alege o opțiune de mai jos:
+                </div>
+            </div>
+            
+            <div style="padding: 0 20px;">
+                <button class="sign-button" id="create-new-wallet" style="width: 100%; margin-bottom: 15px;">
+                    <span class="icon">🔑</span> Generează o cheie privată nouă
+                </button>
+                <button class="cancel-button" id="show-restore-option" style="width: 100%;">
+                    <span class="icon">🔄</span> Reinițializează o cheie privată
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Backup Acknowledgment Modal -->
+    <div class="modal" id="backup-acknowledge-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Notează-ți cuvintele de backup</div>
+            </div>
+            <div class="info-text" style="margin-bottom: 15px;">
+                <strong>IMPORTANT:</strong> Notează-ți aceste cuvinte într-un loc sigur. Ele sunt singura modalitate de a-ți recupera portofelul dacă pierzi accesul la acest dispozitiv.
+            </div>
+            <div style="background-color: var(--background-alt); padding: 15px; border-radius: var(--radius); margin-bottom: 15px; word-spacing: 5px; font-family: monospace; text-align: center; font-weight: 500;" id="new-wallet-mnemonic">
+                Generare cuvinte mnemonice...
+            </div>
+            <div class="info-text" style="margin-bottom: 15px; color: var(--danger);">
+                Nu partaja niciodată aceste cuvinte cu nimeni! Oricine are acces la aceste cuvinte va avea control complet asupra portofelului tău.
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label class="checkbox-container">
+                    <input type="checkbox" id="backup-confirmation"> 
+                    <span>Am notat aceste cuvinte într-un loc sigur</span>
+                </label>
+            </div>
+            <button class="sign-button" id="confirm-backup" style="width: 100%;" disabled>Continuă</button>
+        </div>
+    </div>
+
+    <!-- Restore Wallet Modal -->
+    <div class="modal" id="restore-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Restaurează Portofel</div>
+                <button class="close-button" id="close-restore-modal">&times;</button>
+            </div>
+            <div class="info-text" style="margin-bottom: 15px;">
+                Introdu cele 12 cuvinte mnemonice pentru a-ți restaura portofelul.
+            </div>
+            <textarea style="width: 100%; height: 100px; padding: 10px; border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 15px; font-family: monospace;" id="restore-phrase" placeholder="Introdu cuvintele mnemonice separate prin spații..."></textarea>
+            <div class="info-text" style="margin-bottom: 15px; color: var(--warning);">
+                <strong>Atenție:</strong> Această acțiune va înlocui portofelul curent. Asigură-te că ai făcut backup înainte de a continua.
+            </div>
+            <button class="sign-button" id="restore-wallet" style="width: 100%;">Restaurează Portofelul</button>
+        </div>
+    </div>
+    
+    <!-- Toast Messages -->
+    <div class="toast" id="toast-message"></div>
+    
+    <!-- Include Scripts -->
+    <script>
+        // Flag to track if ethers.js loaded successfully
+        window.ethersLoaded = false;
+        
+        // Function to notify that ethers loaded
+        function ethersLoadSuccess() {
+            window.ethersLoaded = true;
+            console.log("ethers.js loaded successfully");
+        }
+        
+        // Function to try loading from another CDN if the first one fails
+        function loadFallbackEthers() {
+            if (!window.ethersLoaded) {
+                console.log("Trying fallback CDN for ethers.js");
+                const script = document.createElement('script');
+                script.src = "https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js";
+                script.onload = ethersLoadSuccess;
+                document.body.appendChild(script);
+            }
+        }
+    </script>
+    
+    <script src="https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js" 
+        onload="ethersLoadSuccess()" 
+        onerror="loadFallbackEthers()"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" type="application/javascript"></script>
+    <script src="script.js"></script>
+    
+    <script>
+        // Navigation script for multi-page functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            // Override the wallet creation modal display - not needed as it's now the main page
+            window.showInitialScreen = function() {
+                // Do nothing, we're already on the initial screen
+            };
+            
+            // Override the finalize wallet creation to redirect to wallet.html
+            const originalFinalizeWalletCreation = window.finalizeWalletCreation || function(){};
+            window.finalizeWalletCreation = function() {
+                originalFinalizeWalletCreation();
+                setTimeout(() => {
+                    window.location.href = "wallet.html";
+                }, 1000);
+            };
+            
+            // Override the restore wallet button to redirect
+            const originalRestoreWallet = document.getElementById('restore-wallet').onclick;
+            document.getElementById('restore-wallet').onclick = function() {
+                // Call the original function first
+                if (typeof originalRestoreWallet === 'function') {
+                    originalRestoreWallet.call(this);
+                }
+                
+                // Wait a bit for the toast message then redirect
+                setTimeout(() => {
+                    if (localStorage.getItem('certid-wallet')) {
+                        window.location.href = "wallet.html";
+                    }
+                }, 1500);
+            };
+            
+            // Check if wallet already exists and redirect to wallet.html
+            setTimeout(function() {
+                if (localStorage.getItem('certid-wallet')) {
+                    window.location.href = "wallet.html";
+                } else {
+                    // Update UI to show we're on the onboarding page
+                    document.getElementById('wallet-creation-modal').style.display = 'none';
+                }
+            }, 600);
+        });
+    </script>
+</body>
+</html>
