@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CertID Wallet - Settings</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .back-button {
+            font-size: 24px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="status-bar">
+            <span class="time" id="current-time">9:41</span>
+            <div class="icons">
+                <span>📶</span>
+                <span>📡</span>
+                <span>🔋</span>
+            </div>
+        </div>
+        
+        <div class="header">
+            <div style="display: flex; align-items: center;">
+                <span class="back-button" id="back-to-wallet">←</span>
+                <h1>Setări</h1>
+            </div>
+        </div>
+        
+        <div class="wallet-card">
+            <div class="label">Identitate Blockchain</div>
+            <div class="wallet-address" id="wallet-address">Încărcare...</div>
+            <div class="label" style="margin-top: 10px;">Rețea</div>
+            <div id="network-info" style="font-size: 14px; font-weight: 500;">Sepolia Testnet</div>
+        </div>
+        
+        <div class="wallet-actions" style="margin-top: 20px;">
+            <button class="action-button" id="backup-wallet-button">
+                <span class="icon">🔒</span>
+                <span>Backup Portofel</span>
+            </button>
+            <button class="action-button" id="restore-wallet-button">
+                <span class="icon">🔄</span>
+                <span>Reinițializează o cheie privată</span>
+            </button>
+            <button class="action-button" id="new-wallet-button">
+                <span class="icon">🔑</span>
+                <span>Generează o cheie privată nouă</span>
+            </button>
+        </div>
+        
+        <div class="info-card" style="margin: 20px;">
+            <div class="info-title">Informații Portofel</div>
+            <div class="info-text">
+                Fii atent când efectuezi operațiuni pe portofelul tău. Asigură-te că ai un backup sigur al cuvintelor mnemonice pentru a-ți recupera portofelul în caz de nevoie.
+            </div>
+        </div>
+    </div>
+    
+    <!-- Backup Wallet Modal -->
+    <div class="modal" id="backup-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Backup Portofel</div>
+                <button class="close-button" id="close-backup-modal">&times;</button>
+            </div>
+            <div class="info-text" style="margin-bottom: 15px;">
+                <strong>IMPORTANT:</strong> Notează-ți aceste cuvinte într-un loc sigur. Ele sunt singura modalitate de a-ți recupera portofelul dacă pierzi accesul la acest dispozitiv.
+            </div>
+            <div style="background-color: var(--background-alt); padding: 15px; border-radius: var(--radius); margin-bottom: 15px; word-spacing: 5px; font-family: monospace; text-align: center; font-weight: 500;" id="mnemonic-phrase">
+                Încărcare cuvinte mnemonice...
+            </div>
+            <div class="info-text" style="margin-bottom: 15px; color: var(--danger);">
+                Nu partaja niciodată aceste cuvinte cu nimeni! Oricine are acces la aceste cuvinte va avea control complet asupra portofelului tău.
+            </div>
+            <button class="sign-button" id="copy-mnemonic" style="width: 100%;">Copiază cuvintele</button>
+        </div>
+    </div>
+    
+    <!-- Restore Wallet Modal -->
+    <div class="modal" id="restore-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Restaurează Portofel</div>
+                <button class="close-button" id="close-restore-modal">&times;</button>
+            </div>
+            <div class="info-text" style="margin-bottom: 15px;">
+                Introdu cele 12 cuvinte mnemonice pentru a-ți restaura portofelul.
+            </div>
+            <textarea style="width: 100%; height: 100px; padding: 10px; border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 15px; font-family: monospace;" id="restore-phrase" placeholder="Introdu cuvintele mnemonice separate prin spații..."></textarea>
+            <div class="info-text" style="margin-bottom: 15px; color: var(--warning);">
+                <strong>Atenție:</strong> Această acțiune va înlocui portofelul curent. Asigură-te că ai făcut backup înainte de a continua.
+            </div>
+            <button class="sign-button" id="restore-wallet" style="width: 100%;">Restaurează Portofelul</button>
+        </div>
+    </div>
+
+    <!-- Hidden elements needed for JavaScript compatibility -->
+    <div style="display:none;">
+        <div id="wallet-creation-modal"></div>
+        <div id="backup-acknowledge-modal"></div>
+        <div id="confirmation-modal"></div>
+        <div id="qr-modal"></div>
+    </div>
+    
+    <!-- Toast Messages -->
+    <div class="toast" id="toast-message"></div>
+    
+    <!-- Include Scripts -->
+    <script>
+        // Flag to track if ethers.js loaded successfully
+        window.ethersLoaded = false;
+        
+        // Function to notify that ethers loaded
+        function ethersLoadSuccess() {
+            window.ethersLoaded = true;
+            console.log("ethers.js loaded successfully");
+        }
+        
+        // Function to try loading from another CDN if the first one fails
+        function loadFallbackEthers() {
+            if (!window.ethersLoaded) {
+                console.log("Trying fallback CDN for ethers.js");
+                const script = document.createElement('script');
+                script.src = "https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js";
+                script.onload = ethersLoadSuccess;
+                document.body.appendChild(script);
+            }
+        }
+    </script>
+    
+    <script src="https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js" 
+        onload="ethersLoadSuccess()" 
+        onerror="loadFallbackEthers()"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" type="application/javascript"></script>
+    <script src="script.js"></script>
+    
+    <script>
+        // Navigation script for multi-page functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("Settings page DOM loaded");
+            
+            // Redirect to index.html if no wallet exists
+            setTimeout(function() {
+                if (!localStorage.getItem('certid-wallet')) {
+                    window.location.href = "index.html";
+                }
+            }, 600);
+            
+            // Back button navigation
+            document.getElementById('back-to-wallet').addEventListener('click', function() {
+                window.location.href = "wallet.html";
+            });
+            
+            // Override showInitialScreen to redirect to index.html
+            window.showInitialScreen = function() {
+                window.location.href = "index.html";
+            };
+            
+            // Make sure backup wallet button works
+            if (document.getElementById('backup-wallet-button')) {
+                document.getElementById('backup-wallet-button').addEventListener('click', function() {
+                    console.log("Backup wallet button clicked");
+                    // Get mnemonic
+                    const mnemonic = localStorage.getItem('certid-wallet-mnemonic');
+                    
+                    if (mnemonic) {
+                        // Show mnemonic in modal
+                        document.getElementById('mnemonic-phrase').textContent = mnemonic;
+                        document.getElementById('backup-modal').style.display = 'flex';
+                    } else {
+                        showToast('Nu s-au putut găsi cuvintele de recuperare', 'error');
+                    }
+                });
+            }
+            
+            // Make sure restore wallet button works
+            if (document.getElementById('restore-wallet-button')) {
+                document.getElementById('restore-wallet-button').addEventListener('click', function() {
+                    console.log("Restore wallet button clicked");
+                    document.getElementById('restore-modal').style.display = 'flex';
+                });
+            }
+            
+            // New wallet button
+            document.getElementById('new-wallet-button').addEventListener('click', function() {
+                console.log("New wallet button clicked");
+                if (confirm('Ești sigur că dorești să generezi o cheie privată nouă? Acest lucru va înlocui portofelul curent.')) {
+                    localStorage.removeItem('certid-wallet');
+                    localStorage.removeItem('certid-wallet-mnemonic');
+                    window.location.href = "index.html";
+                }
+            });
+            
+            // Make sure modal close buttons work
+            document.getElementById('close-backup-modal').addEventListener('click', function() {
+                document.getElementById('backup-modal').style.display = 'none';
+            });
+            
+            document.getElementById('close-restore-modal').addEventListener('click', function() {
+                document.getElementById('restore-modal').style.display = 'none';
+            });
+            
+            // Copy mnemonic button
+            document.getElementById('copy-mnemonic').addEventListener('click', function() {
+                const mnemonic = document.getElementById('mnemonic-phrase').textContent;
+                navigator.clipboard.writeText(mnemonic).then(() => {
+                    showToast('Cuvinte copiate în clipboard');
+                });
+            });
+            
+            // Update network info
+            setTimeout(function() {
+                if (window.NETWORK_CONFIG && window.NETWORK_CONFIG.name) {
+                    document.getElementById('network-info').textContent = window.NETWORK_CONFIG.name + " Testnet";
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

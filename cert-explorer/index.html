@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cert Explorer - EAS Attestation Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.2/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-cloud/1.2.5/d3.layout.cloud.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+    <style>
+        .word-cloud-container {
+            height: 280px;
+            position: relative;
+        }
+        #word-cloud {
+            width: 100%;
+            height: 100%;
+        }
+        .attestation-card:hover {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            transform: translateY(-2px);
+            transition: all 0.2s ease;
+        }
+        .loader {
+            border-top-color: #3498db;
+            animation: spinner 1.5s linear infinite;
+        }
+        @keyframes spinner {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .address {
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="mb-6">
+            <div class="flex flex-col md:flex-row items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800">Cert Explorer</h1>
+                    <p class="text-gray-600">EAS Attestation Dashboard for Sepolia</p>
+                </div>
+                <div class="mt-4 md:mt-0">
+                    <div class="flex space-x-2">
+                        <button id="refresh-btn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Refresh Data
+                        </button>
+                        <a href="https://sepolia.easscan.org/" target="_blank" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                            EAS Scan
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Word Cloud -->
+        <div class="bg-white rounded-xl shadow-md overflow-hidden mb-8">
+            <div class="p-4 border-b border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-800">Attestation Tag Cloud</h2>
+                <p class="text-gray-600 text-sm">Visual representation of attestation tags</p>
+            </div>
+            <div class="word-cloud-container p-4">
+                <div id="word-cloud-loading" class="flex items-center justify-center h-full">
+                    <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
+                </div>
+                <div id="word-cloud"></div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="bg-white rounded-xl shadow-md overflow-hidden mb-8">
+            <div class="p-4 border-b border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-800">Filters</h2>
+            </div>
+            <div class="p-4">
+                <form id="filter-form" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                        <label for="attester" class="block text-sm font-medium text-gray-700 mb-1">Attester Address</label>
+                        <input type="text" id="attester" name="attester" placeholder="0x..." 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label for="recipient" class="block text-sm font-medium text-gray-700 mb-1">Recipient Address</label>
+                        <input type="text" id="recipient" name="recipient" placeholder="0x..." 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label for="timeRange" class="block text-sm font-medium text-gray-700 mb-1">Time Range</label>
+                        <select id="timeRange" name="timeRange" 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                            <option value="all">All Time</option>
+                            <option value="24h" selected>Last 24 Hours</option>
+                            <option value="7d">Last 7 Days</option>
+                            <option value="30d">Last 30 Days</option>
+                        </select>
+                    </div>
+                    <div class="flex items-end">
+                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md w-full">
+                            Apply Filters
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Attestations List -->
+        <div class="bg-white rounded-xl shadow-md overflow-hidden">
+            <div class="p-4 border-b border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-800">Attestations</h2>
+                <p id="attestation-count" class="text-gray-600 text-sm">Loading attestations...</p>
+            </div>
+            <div id="loading" class="flex items-center justify-center p-12">
+                <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
+            </div>
+            <div id="attestations-container" class="hidden divide-y divide-gray-200">
+                <!-- Attestations will be populated here -->
+            </div>
+            <div id="no-results" class="hidden p-12 text-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h3 class="text-lg font-medium text-gray-900">No attestations found</h3>
+                <p class="mt-1 text-gray-500">Try changing your filters or refreshing the data.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Attestation Details -->
+    <div id="attestation-modal" class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-lg max-w-2xl w-full mx-4 overflow-hidden">
+            <div class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="text-lg font-medium text-gray-900">Attestation Details</h3>
+                <button id="close-modal" class="text-gray-400 hover:text-gray-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6">
+                <div id="modal-content">
+                    <!-- Modal content will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API endpoint
+        const API_URL = '/api/attestations';
+        
+        // State variables
+        let attestations = [];
+        let tags = [];
+        
+        // DOM Elements
+        const attestationsContainer = document.getElementById('attestations-container');
+        const attestationCount = document.getElementById('attestation-count');
+        const loading = document.getElementById('loading');
+        const noResults = document.getElementById('no-results');
+        const refreshBtn = document.getElementById('refresh-btn');
+        const filterForm = document.getElementById('filter-form');
+        const modal = document.getElementById('attestation-modal');
+        const closeModal = document.getElementById('close-modal');
+        const modalContent = document.getElementById('modal-content');
+        const wordCloudLoading = document.getElementById('word-cloud-loading');
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchAttestations();
+            
+            // Event listeners
+            refreshBtn.addEventListener('click', fetchAttestations);
+            filterForm.addEventListener('submit', handleFilterSubmit);
+            closeModal.addEventListener('click', () => {
+                modal.classList.add('hidden');
+            });
+            
+            // Close modal when clicking outside
+            window.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.add('hidden');
+                }
+            });
+        });
+        
+        // Fetch attestations from API
+        function fetchAttestations() {
+            // Show loading states
+            loading.classList.remove('hidden');
+            attestationsContainer.classList.add('hidden');
+            noResults.classList.add('hidden');
+            wordCloudLoading.classList.remove('hidden');
+            attestationCount.textContent = 'Loading attestations...';
+            
+            // Get filter values
+            const timeRange = document.getElementById('timeRange').value;
+            const attester = document.getElementById('attester').value;
+            const recipient = document.getElementById('recipient').value;
+            
+            // Build query params
+            let queryParams = new URLSearchParams();
+            
+            if (attester) queryParams.append('attester', attester);
+            if (recipient) queryParams.append('recipient', recipient);
+            
+            // Add time range filter
+            if (timeRange !== 'all') {
+                const now = Math.floor(Date.now() / 1000);
+                let fromTime;
+                
+                switch (timeRange) {
+                    case '24h':
+                        fromTime = now - (24 * 60 * 60);
+                        break;
+                    case '7d':
+                        fromTime = now - (7 * 24 * 60 * 60);
+                        break;
+                    case '30d':
+                        fromTime = now - (30 * 24 * 60 * 60);
+                        break;
+                }
+                
+                queryParams.append('fromTime', fromTime);
+            }
+            
+            // Make API request
+            fetch(`${API_URL}?${queryParams.toString()}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    attestations = data.attestations || [];
+                    tags = data.tags || [];
+                    
+                    // Update UI
+                    renderAttestations();
+                    renderWordCloud();
+                })
+                .catch(error => {
+                    console.error('Error fetching attestations:', error);
+                    attestationCount.textContent = 'Error loading attestations. Please try again.';
+                    loading.classList.add('hidden');
+                    noResults.classList.remove('hidden');
+                });
+        }
+        
+        // Handle filter form submission
+        function handleFilterSubmit(e) {
+            e.preventDefault();
+            fetchAttestations();
+        }
+        
+        // Render attestations list
+        function renderAttestations() {
+            // Update count text
+            attestationCount.textContent = `${attestations.length} attestation${attestations.length !== 1 ? 's' : ''} found`;
+            
+            // Hide loading, show appropriate container
+            loading.classList.add('hidden');
+            
+            if (attestations.length === 0) {
+                noResults.classList.remove('hidden');
+                attestationsContainer.classList.add('hidden');
+                return;
+            }
+            
+            // Clear previous attestations
+            attestationsContainer.innerHTML = '';
+            
+            // Sort by time (newest first)
+            attestations.sort((a, b) => parseInt(b.time) - parseInt(a.time));
+            
+            // Render each attestation
+            attestations.forEach(attestation => {
+                const attestationEl = document.createElement('div');
+                attestationEl.className = 'attestation-card p-4 hover:bg-gray-50 cursor-pointer';
+                attestationEl.addEventListener('click', () => showAttestationDetails(attestation));
+                
+                const timestamp = parseInt(attestation.time) * 1000;
+                const formattedDate = moment(timestamp).format('MMM D, YYYY [at] h:mm A');
+                const relativeTime = moment(timestamp).fromNow();
+                
+                attestationEl.innerHTML = `
+                    <div class="flex flex-col md:flex-row md:items-center justify-between">
+                        <div>
+                            <div class="flex items-center space-x-2">
+                                <span class="font-mono text-sm bg-gray-100 px-2 py-1 rounded">${truncateAddress(attestation.uid)}</span>
+                                <span class="text-xs px-2 py-1 bg-green-100 text-green-800 rounded-full">${attestation.revoked ? 'Revoked' : 'Active'}</span>
+                            </div>
+                            <div class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                                <div>
+                                    <span class="text-gray-500">Attester:</span> 
+                                    <span class="font-mono address" title="${attestation.attester}">${truncateAddress(attestation.attester)}</span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-500">Recipient:</span> 
+                                    <span class="font-mono address" title="${attestation.recipient}">${truncateAddress(attestation.recipient)}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-2 md:mt-0 text-right">
+                            <div class="text-sm text-gray-500">${formattedDate}</div>
+                            <div class="text-xs text-gray-400">${relativeTime}</div>
+                        </div>
+                    </div>
+                `;
+                
+                attestationsContainer.appendChild(attestationEl);
+            });
+            
+            // Show attestations
+            attestationsContainer.classList.remove('hidden');
+        }
+        
+        // Show attestation details in modal
+        function showAttestationDetails(attestation) {
+            // Populate modal content
+            modalContent.innerHTML = `
+                <div class="space-y-4">
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">UID</h4>
+                        <p class="font-mono text-sm break-all">${attestation.uid}</p>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">Schema</h4>
+                        <p class="font-mono text-sm break-all">${attestation.schema}</p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-500">Attester</h4>
+                            <p class="font-mono text-sm break-all">${attestation.attester}</p>
+                            <a href="https://sepolia.etherscan.io/address/${attestation.attester}" target="_blank" 
+                               class="text-blue-600 hover:text-blue-800 text-xs inline-flex items-center mt-1">
+                                View on Etherscan
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                            </a>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-500">Recipient</h4>
+                            <p class="font-mono text-sm break-all">${attestation.recipient}</p>
+                            <a href="https://sepolia.etherscan.io/address/${attestation.recipient}" target="_blank" 
+                               class="text-blue-600 hover:text-blue-800 text-xs inline-flex items-center mt-1">
+                                View on Etherscan
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                            </a>
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">Timestamp</h4>
+                        <p>${moment(parseInt(attestation.time) * 1000).format('MMMM D, YYYY [at] h:mm:ss A')}</p>
+                    </div>
+                    <div class="pt-2">
+                        <a href="https://sepolia.easscan.org/attestation/view/${attestation.uid}" target="_blank" 
+                           class="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 w-full">
+                            View on EAS Scan
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+            `;
+            
+            // Show modal
+            modal.classList.remove('hidden');
+        }
+        
+        // Render word cloud
+        function renderWordCloud() {
+            // Check if we have tags to display
+            if (tags.length === 0) {
+                document.getElementById('word-cloud').innerHTML = `
+                    <div class="flex items-center justify-center h-full">
+                        <div class="text-center text-gray-500">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <p>No tags available</p>
+                        </div>
+                    </div>
+                `;
+                wordCloudLoading.classList.add('hidden');
+                return;
+            }
+            
+            // Count tag frequencies
+            const tagCounts = {};
+            tags.forEach(tag => {
+                tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+            });
+            
+            // Convert to array of objects for D3
+            const words = Object.keys(tagCounts).map(tag => ({
+                text: tag,
+                size: 10 + (tagCounts[tag] * 5) // Scale size based on frequency
+            }));
+            
+            // Color scale
+            const color = d3.scaleOrdinal(d3.schemeCategory10);
+            
+            // Clear previous word cloud
+            d3.select("#word-cloud").selectAll("*").remove();
+            
+            // Create the word cloud layout
+            const layout = d3.layout.cloud()
+                .size([document.getElementById('word-cloud').clientWidth, 250])
+                .words(words)
+                .padding(5)
+                .rotate(() => ~~(Math.random() * 2) * 90)
+                .fontSize(d => d.size)
+                .on("end", draw);
+            
+            layout.start();
+            
+            // Function to draw the word cloud
+            function draw(words) {
+                wordCloudLoading.classList.add('hidden');
+                
+                d3.select("#word-cloud")
+                    .append("svg")
+                    .attr("width", "100%")
+                    .attr("height", "100%")
+                    .attr("preserveAspectRatio", "xMidYMid meet")
+                    .attr("viewBox", `0 0 ${layout.size()[0]} ${layout.size()[1]}`)
+                    .append("g")
+                    .attr("transform", `translate(${layout.size()[0] / 2},${layout.size()[1] / 2})`)
+                    .selectAll("text")
+                    .data(words)
+                    .enter()
+                    .append("text")
+                    .style("font-size", d => `${d.size}px`)
+                    .style("fill", (d, i) => color(i))
+                    .attr("text-anchor", "middle")
+                    .attr("transform", d => `translate(${d.x},${d.y}) rotate(${d.rotate})`)
+                    .text(d => d.text)
+                    .on("click", (event, d) => {
+                        // Filter attestations by this tag (in a real app, you'd have to decode
+                        // the attestation data to implement this properly)
+                        alert(`Selected tag: ${d.text}`);
+                    });
+            }
+        }
+        
+        // Helper function to truncate Ethereum addresses
+        function truncateAddress(address) {
+            if (!address) return '';
+            return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
+        }
+    </script>
+</body>
+</html>

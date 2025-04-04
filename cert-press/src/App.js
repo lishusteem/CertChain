@@ -5,7 +5,6 @@ import './App.css';
 import ConnectWallet from './components/ConnectWallet';
 import ArticleForm from './components/ArticleForm';
 import AttestationStatus from './components/AttestationStatus';
-import { walletConnectService } from './services/walletConnectService';
 
 // Sepolia testnet EAS contract address
 const EAS_CONTRACT_ADDRESS = "0xC2679fBD37d54388Ce493F1DB75320D236e1815e";
@@ -25,7 +24,6 @@ function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [txHash, setTxHash] = useState("");
-  const [isWalletConnectActive, setIsWalletConnectActive] = useState(false);
 
   // Initialize EAS
   useEffect(() => {
@@ -45,60 +43,16 @@ function App() {
     initializeEAS();
   }, [signer]);
 
-  // Initialize WalletConnect event listeners
-  useEffect(() => {
-    const setupWalletConnectEvents = async () => {
-      if (!walletConnectService.provider) {
-        await walletConnectService.init();
-      }
-
-      walletConnectService.provider.on('connect', ({ accounts }) => {
-        if (accounts && accounts.length > 0) {
-          setWalletAddress(accounts[0]);
-          setIsWalletConnectActive(true);
-
-          const initEAS = async () => {
-            try {
-              const eas = new EAS(EAS_CONTRACT_ADDRESS);
-              await eas.connect(walletConnectService.provider);
-              setEasInstance(eas);
-            } catch (err) {
-              console.error("Error initializing EAS with WalletConnect:", err);
-              setError(`Eroare la inițializarea EAS cu WalletConnect: ${err.message}`);
-            }
-          };
-
-          initEAS();
-        }
-      });
-
-      walletConnectService.provider.on('disconnect', () => {
-        setIsWalletConnectActive(false);
-        if (!walletAddress) {
-          setWalletAddress('');
-          setEasInstance(null);
-        }
-      });
-    };
-
-    setupWalletConnectEvents();
-
-    return () => {
-      if (walletConnectService.provider) {
-        walletConnectService.provider.removeAllListeners();
-      }
-    };
-  }, []);
-
   const connectWallet = async () => {
     if (window.ethereum) {
       try {
+        // Request account access
         await window.ethereum.request({ method: 'eth_requestAccounts' });
-
+        
         const provider = new BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
         const address = await signer.getAddress();
-
+        
         setProvider(provider);
         setSigner(signer);
         setWalletAddress(address);
@@ -124,9 +78,10 @@ function App() {
 
     try {
       const schemaEncoder = new SchemaEncoder(SCHEMA_STRING);
-
+      
+      // Convert tags array to the format expected by EAS
       const tagsArray = formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag !== "");
-
+      
       const encodedData = schemaEncoder.encodeData([
         { name: "authorAddress", value: walletAddress, type: "address" },
         { name: "authorName", value: formData.authorName, type: "string" },
@@ -136,20 +91,24 @@ function App() {
         { name: "tags", value: tagsArray, type: "string[]" }
       ]);
 
+      // Prepare transaction
       const tx = await easInstance.attest({
         schema: SCHEMA_UID,
         data: {
-          recipient: "0x0000000000000000000000000000000000000000",
+          recipient: "0x0000000000000000000000000000000000000000", // Zero address as the recipient
           expirationTime: NO_EXPIRATION,
           revocable: false,
           data: encodedData,
         },
       });
 
+      // Set the transaction hash
       setTxHash(tx.data.hash);
-
+      
+      // Wait for the transaction to be confirmed
       const newAttestationUID = await tx.wait();
-
+      
+      // Update the attestation UID in state
       setAttestationUid(newAttestationUID);
       console.log("Atestare realizată cu succes, UID:", newAttestationUID);
     } catch (err) {
@@ -185,21 +144,20 @@ function App() {
             </h1>
             <p style={{ fontSize: '1.5rem' }}>Creează atestări pentru articole folosind CertPress</p>
           </div>
-
+          
           <main className="App-main">
             <ConnectWallet 
               connectWallet={connectWallet} 
-              walletAddress={walletAddress}
-              isWalletConnectActive={isWalletConnectActive}
+              walletAddress={walletAddress} 
             />
-
-            {(walletAddress || isWalletConnectActive) && (
+            
+            {walletAddress && (
               <ArticleForm 
                 onSubmit={submitAttestation} 
                 isSubmitting={isSubmitting}
               />
             )}
-
+            
             <AttestationStatus 
               attestationUid={attestationUid}
               txHash={txHash}
@@ -209,7 +167,7 @@ function App() {
           </main>
         </div>
       </div>
-
+      
       <footer className="App-footer" style={{ padding: '4rem 0' }}>
         <div className="container">
           <p style={{ fontSize: '1rem', marginBottom: '0.75rem' }}>Folosind EAS pe rețeaua de testare Sepolia</p>

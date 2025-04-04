@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CertID Wallet</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <div class="status-bar">
+            <span class="time" id="current-time">9:41</span>
+            <div class="icons">
+                <span>📶</span>
+                <span>📡</span>
+                <span>🔋</span>
+            </div>
+        </div>
+        
+        <div class="header">
+            <h1>CertID Wallet</h1>
+            <button class="settings-button" id="go-to-settings">⚙️</button>
+        </div>
+        
+        <div class="wallet-card">
+            <div class="label">Identitate Blockchain</div>
+            <div class="wallet-address" id="wallet-address">Încărcare...</div>
+        </div>
+        
+        <div class="attest-section">
+            <button class="attest-button" id="attest-button">
+                <span class="icon">📷</span>
+                <span>Atestă Articol Nou</span>
+            </button>
+            
+            <!-- Enhanced WalletConnect button -->
+            <button class="wallet-connect-button" id="wallet-connect-button">
+                <span class="icon">🔗</span>
+                <span>Conectează cu WalletConnect</span>
+            </button>
+            
+            <div class="info-card">
+                <div class="info-title">Ce este Atestarea Articolelor?</div>
+                <div class="info-text">
+                    Atestarea creează o înregistrare permanentă, verificabilă pe blockchain că ai revizuit și aprobat conținutul unui articol.
+                </div>
+            </div>
+        </div>
+        
+        <div class="transactions-section">
+            <div class="section-header">
+                <div class="section-title">Tranzacții Recente</div>
+                <div class="view-all" id="view-all">Vezi Toate</div>
+            </div>
+            
+            <div class="transaction-list" id="transaction-list">
+                <!-- Tranzacțiile vor fi adăugate aici dinamic -->
+                <div class="transaction-item" style="text-align: center; color: var(--text-tertiary);">
+                    Nu există tranzacții încă
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Manual Input Modal (renamed from QR Scanner Modal) -->
+    <div class="modal" id="qr-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Introdu Link sau JSON</div>
+                <button class="close-button" id="close-qr-modal">&times;</button>
+            </div>
+            
+            <!-- Ethereum Link Input -->
+            <div class="info-text" style="margin-bottom: 10px;">
+                Introdu un link Ethereum (ethereum:):
+            </div>
+            <textarea id="ethereum-link-input" placeholder="ethereum:0x..." 
+                style="width: 100%; height: 80px; padding: 10px; border-radius: var(--radius); 
+                border: 1px solid var(--border); margin-bottom: 10px; font-family: monospace;"></textarea>
+            <button class="sign-button" id="process-manual-input" style="width: 100%; margin-bottom: 20px;">Procesează Link</button>
+            
+            <hr style="margin: 20px 0; border: none; border-top: 1px solid var(--border);">
+            
+            <!-- JSON Input Section -->
+            <div class="info-text" style="margin-bottom: 10px;">
+                <strong>Alternativ</strong>, introdu date în format JSON:
+            </div>
+            <textarea id="json-input" placeholder='{"title": "Numele documentului", "hash": "0x..."}' 
+                style="width: 100%; height: 100px; padding: 10px; border-radius: var(--radius); 
+                border: 1px solid var(--border); margin-bottom: 10px; font-family: monospace;"></textarea>
+            <button class="sign-button" id="process-json-input" style="width: 100%;">Procesează JSON</button>
+        </div>
+    </div>
+    
+    <!-- Confirmation Modal -->
+    <div class="confirmation-modal" id="confirmation-modal">
+        <div class="confirmation-content">
+            <div class="modal-header">
+                <div class="modal-title">Confirmă Acțiunea</div>
+                <button class="close-button" id="close-confirmation-modal">&times;</button>
+            </div>
+            <div class="document-info">
+                <div class="document-title" id="document-title">Titlu Document</div>
+                <div class="info-text" id="confirmation-description">
+                    Confirmi semnarea acestei tranzacții?
+                </div>
+                <div class="info-text">Hash/Date:</div>
+                <div class="document-hash" id="document-hash">0x0000000000000000000000000000000000000000000000000000000000000000</div>
+            </div>
+            <div class="info-text">Ești sigur că dorești să continui cu această acțiune?</div>
+            <div class="confirm-buttons">
+                <button class="cancel-button" id="cancel-attestation">Anulează</button>
+                <button class="sign-button" id="confirm-attestation">Confirmă</button>
+            </div>
+            <div class="spinner" id="attestation-spinner"></div>
+        </div>
+    </div>
+
+    <!-- Enhanced WalletConnect Modal -->
+    <div class="modal" id="walletconnect-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">WalletConnect</div>
+                <button class="close-button" id="close-walletconnect-modal">&times;</button>
+            </div>
+            
+            <div class="info-text" style="margin-bottom: 15px;">
+                Scanează codul QR sau introdu URI-ul WalletConnect pentru conectare:
+            </div>
+            
+            <!-- Enhanced QR code container with better styling -->
+            <div id="walletconnect-qr-container" style="text-align: center; margin-bottom: 20px; min-height: 250px;">
+                <div id="walletconnect-qr-placeholder" style="width: 250px; height: 250px; background-color: var(--background-alt); margin: 0 auto; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+                    <span>Inițializare...</span>
+                </div>
+            </div>
+            
+            <div class="info-text" style="margin-bottom: 10px;">
+                Introdu manual URI-ul WalletConnect:
+            </div>
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <textarea id="walletconnect-uri-input" 
+                    placeholder="wc:..." 
+                    style="flex-grow: 1; height: 40px; padding: 10px; border-radius: var(--radius); border: 1px solid var(--border); font-family: monospace;"></textarea>
+                <button class="sign-button" id="process-walletconnect-uri" style="white-space: nowrap;">Conectează</button>
+            </div>
+            
+            <!-- Status indicator with enhanced styling -->
+            <div id="walletconnect-status" style="margin-top: 15px; text-align: center; font-weight: 500; display: none;"></div>
+            
+            <div class="info-text" style="margin-top: 15px; font-size: 12px; color: var(--text-tertiary); background-color: var(--background-alt); padding: 10px; border-radius: var(--radius-sm);">
+                <strong>Ce este WalletConnect?</strong> WalletConnect este un protocol care permite aplicațiilor descentralizate (dApps) să se conecteze la portofelul tău mobil în mod securizat.
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden elements needed for JavaScript compatibility -->
+    <div style="display:none;">
+        <div id="wallet-creation-modal"></div>
+        <div id="backup-acknowledge-modal"></div>
+        <div id="restore-modal"></div>
+    </div>
+    
+    <!-- Toast Messages -->
+    <div class="toast" id="toast-message"></div>
+    
+    <!-- Include Scripts -->
+    <script>
+        // Flag to track if ethers.js loaded successfully
+        window.ethersLoaded = false;
+        
+        // Function to notify that ethers loaded
+        function ethersLoadSuccess() {
+            window.ethersLoaded = true;
+            console.log("ethers.js loaded successfully");
+        }
+        
+        // Function to try loading from another CDN if the first one fails
+        function loadFallbackEthers() {
+            if (!window.ethersLoaded) {
+                console.log("Trying fallback CDN for ethers.js");
+                const script = document.createElement('script');
+                script.src = "https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js";
+                script.onload = ethersLoadSuccess;
+                document.body.appendChild(script);
+            }
+        }
+    </script>
+    
+    <!-- Add WalletConnect dependencies -->
+    <script src="https://unpkg.com/@walletconnect/client@1.8.0/dist/umd/index.min.js"></script>
+    <script src="https://unpkg.com/qrcode@1.5.1/build/qrcode.min.js"></script>
+    <script src="https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js" 
+        onload="ethersLoadSuccess()" 
+        onerror="loadFallbackEthers()"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" type="application/javascript"></script>
+    <script src="script.js"></script>
+    
+    <script>
+        // Navigation script for multi-page functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            // Redirect to index.html if no wallet exists
+            setTimeout(function() {
+                if (!localStorage.getItem('certid-wallet')) {
+                    window.location.href = "index.html";
+                }
+            }, 600);
+            
+            // Settings button navigation
+            document.getElementById('go-to-settings').addEventListener('click', function() {
+                window.location.href = "settings.html";
+            });
+            
+            // Override showInitialScreen to redirect to index.html
+            window.showInitialScreen = function() {
+                window.location.href = "index.html";
+            };
+            
+            // Make sure all buttons are properly initialized
+            document.getElementById('attest-button').addEventListener('click', function() {
+                console.log("Attest button clicked");
+                
+                // Show the manual input modal directly
+                document.getElementById('qr-modal').style.display = 'flex';
+                
+                // Focus on the input field
+                setTimeout(() => {
+                    document.getElementById('ethereum-link-input').focus();
+                }, 300);
+            });
+            
+            // Process manual input
+            document.getElementById('process-manual-input').addEventListener('click', function() {
+                console.log("Process manual input clicked");
+                const inputText = document.getElementById('ethereum-link-input').value.trim();
+                
+                if (!inputText) {
+                    window.showToast('Te rugăm să introduci un link sau text', 'error');
+                    return;
+                }
+                
+                // Process the input text
+                processInputText(inputText);
+                
+                // Clear the input field
+                document.getElementById('ethereum-link-input').value = '';
+            });
+            
+            // Process the input text
+            function processInputText(text) {
+                console.log("Processing input:", text);
+                
+                // Check if it's an ethereum link
+                if (text.toLowerCase().startsWith('ethereum:')) {
+                    window.handleEthereumLink(text);
+                    return;
+                }
+                
+                // Try to parse as JSON, but don't require it
+                try {
+                    const jsonData = JSON.parse(text);
+                    
+                    // If we have JSON with title and hash, use the existing flow
+                    if (jsonData.title && jsonData.hash) {
+                        // Update the confirmation modal
+                        document.getElementById('document-title').textContent = jsonData.title;
+                        document.getElementById('document-hash').textContent = jsonData.hash;
+                    } else {
+                        // For other JSON data, display raw content
+                        document.getElementById('document-title').textContent = "JSON Data";
+                        document.getElementById('document-hash').textContent = JSON.stringify(jsonData, null, 2);
+                    }
+                } catch (error) {
+                    // Not JSON, just display the raw text
+                    document.getElementById('document-title').textContent = "Text Input";
+                    document.getElementById('document-hash').textContent = text;
+                }
+                
+                // Hide input modal and show confirmation modal
+                document.getElementById('qr-modal').style.display = 'none';
+                document.getElementById('confirmation-modal').style.display = 'flex';
+            }
+            
+            // Make sure close button works
+            document.getElementById('close-qr-modal').addEventListener('click', function() {
+                document.getElementById('qr-modal').style.display = 'none';
+            });
+            
+            // Make sure other confirmation buttons work
+            document.getElementById('close-confirmation-modal').addEventListener('click', function() {
+                document.getElementById('confirmation-modal').style.display = 'none';
+            });
+            
+            document.getElementById('cancel-attestation').addEventListener('click', function() {
+                document.getElementById('confirmation-modal').style.display = 'none';
+            });
+
+            // Ensure confirmation buttons work properly for transaction signing
+            document.getElementById('confirm-attestation').addEventListener('click', async function() {
+                console.log("Confirm attestation clicked");
+                const documentHash = document.getElementById('document-hash').textContent;
+                const documentTitle = document.getElementById('document-title').textContent;
+                
+                try {
+                    // Show processing indicator
+                    document.getElementById('attestation-spinner').style.display = 'block';
+                    
+                    console.log("Processing document/transaction:", documentHash);
+                    
+                    let txHash;
+                    // Check if this is an ethereum: link
+                    if (documentHash.includes('ethereum:')) {
+                        console.log("Handling as ethereum transaction");
+                        
+                        if (typeof window.signAndSendEthereumTransaction === 'function') {
+                            txHash = await window.signAndSendEthereumTransaction(documentHash, documentTitle);
+                        } else {
+                            throw new Error("Transaction signing function not available");
+                        }
+                    } else {
+                        console.log("Handling as regular attestation");
+                        
+                        if (typeof window.attestDocument === 'function') {
+                            txHash = await window.attestDocument(documentHash, documentTitle);
+                        } else {
+                            throw new Error("Attestation function not available");
+                        }
+                    }
+                    
+                    // Hide confirmation modal
+                    document.getElementById('confirmation-modal').style.display = 'none';
+                    
+                    // Show success message with transaction hash
+                    if (typeof window.showToast === 'function') {
+                        window.showToast(`Transaction submitted: ${txHash.substring(0, 10)}...`, 'success');
+                    } else {
+                        alert(`Transaction submitted: ${txHash}`);
+                    }
+                } catch (error) {
+                    // Hide spinner
+                    document.getElementById('attestation-spinner').style.display = 'none';
+                    
+                    console.error('Error processing transaction:', error);
+                    if (typeof window.showToast === 'function') {
+                        window.showToast('Transaction failed: ' + (error.message || "Unknown error"), 'error');
+                    } else {
+                        alert('Transaction failed: ' + (error.message || "Unknown error"));
+                    }
+                }
+            });
+            
+            // Enhanced WalletConnect button handler
+            document.getElementById('wallet-connect-button').addEventListener('click', function() {
+                console.log("WalletConnect button clicked");
+                
+                // Show the WalletConnect modal
+                document.getElementById('walletconnect-modal').style.display = 'flex';
+                
+                // If we have an active session, show details
+                if (window.walletConnectSession && window.walletConnectSession.connected) {
+                    const status = document.getElementById('walletconnect-status');
+                    status.innerHTML = `
+                        <div style="padding: 15px; background-color: #e6ffe6; border-radius: var(--radius); margin-bottom: 15px;">
+                            <div style="font-weight: 700; margin-bottom: 5px;">✓ Connected</div>
+                            <strong>dApp:</strong> ${window.walletConnectSession.peerMeta?.name || "Unknown dApp"}<br>
+                            <strong>URL:</strong> ${window.walletConnectSession.peerMeta?.url || "-"}<br>
+                            <strong>Network:</strong> ${NETWORK_CONFIG.name}
+                        </div>
+                        <button class="cancel-button" id="disconnect-walletconnect" style="width: 100%;">Disconnect</button>
+                    `;
+                    status.style.display = 'block';
+                    
+                    // Hide the QR code when connected
+                    document.getElementById('walletconnect-qr-container').style.display = 'none';
+                    
+                    document.getElementById('disconnect-walletconnect').addEventListener('click', function() {
+                        if (window.disconnectWalletConnect) {
+                            window.disconnectWalletConnect();
+                            // Show the QR code container again
+                            document.getElementById('walletconnect-qr-container').style.display = 'block';
+                        }
+                    });
+                } else {
+                    // Show the QR code container
+                    document.getElementById('walletconnect-qr-container').style.display = 'block';
+                    
+                    // Initialize a new session
+                    if (window.initializeWalletConnectSession) {
+                        window.initializeWalletConnectSession();
+                    }
+                }
+            });
+            
+            // Close modal handler
+            document.getElementById('close-walletconnect-modal').addEventListener('click', function() {
+                document.getElementById('walletconnect-modal').style.display = 'none';
+            });
+            
+            // Process URI button handler with enhanced validation
+            document.getElementById('process-walletconnect-uri').addEventListener('click', function() {
+                const uri = document.getElementById('walletconnect-uri-input').value.trim();
+                if (!uri) {
+                    window.showToast('Trebuie să introduci un URI WalletConnect', 'error');
+                    return;
+                }
+                
+                if (uri.startsWith('wc:')) {
+                    if (window.connectToWalletConnect) {
+                        window.connectToWalletConnect(uri);
+                    } else {
+                        window.showToast('Funcționalitatea WalletConnect nu este disponibilă', 'error');
+                    }
+                } else {
+                    window.showToast('Format URI WalletConnect invalid (trebuie să înceapă cu "wc:")', 'error');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
